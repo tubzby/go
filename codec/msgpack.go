@@ -539,8 +539,14 @@ func (d *msgpackDecDriver) DecodeBytes(bs []byte, isstring, zerocopy bool) (bsOu
 	// ignore isstring. Expect that the bytes may be found from msgpackContainerStr or msgpackContainerBin
 	if bd := d.bd; bd == mpBin8 || bd == mpBin16 || bd == mpBin32 {
 		clen = d.readContainerLen(msgpackContainerBin)
+		if d.h.MaxDecodeByteLen > 0 && clen > d.h.MaxDecodeByteLen {
+			panic(fmt.Errorf("Byte len exceed [%v:%v]", clen, d.h.MaxDecodeByteLen))
+		}
 	} else {
 		clen = d.readContainerLen(msgpackContainerStr)
+		if d.h.MaxDecodeStringLen > 0 && clen > d.h.MaxDecodeStringLen {
+			panic(fmt.Errorf("String len exceed [%v:%v]", clen, d.h.MaxDecodeStringLen))
+		}
 	}
 	// println("DecodeBytes: clen: ", clen)
 	d.bdRead = false
@@ -621,11 +627,19 @@ func (d *msgpackDecDriver) readContainerLen(ct msgpackContainerType) (clen int) 
 }
 
 func (d *msgpackDecDriver) ReadMapStart() int {
-	return d.readContainerLen(msgpackContainerMap)
+	clen := d.readContainerLen(msgpackContainerMap)
+	if d.h.MaxDecodeMapLen > 0 && clen > d.h.MaxDecodeMapLen {
+		panic(fmt.Errorf("Map len exceed [%v:%v]", clen, d.h.MaxDecodeMapLen))
+	}
+	return clen
 }
 
 func (d *msgpackDecDriver) ReadArrayStart() int {
-	return d.readContainerLen(msgpackContainerList)
+	clen := d.readContainerLen(msgpackContainerList)
+	if d.h.MaxDecodeArrayLen > 0 && clen > d.h.MaxDecodeArrayLen {
+		panic(fmt.Errorf("Array len exceed [%v:%v]", clen, d.h.MaxDecodeArrayLen))
+	}
+	return clen
 }
 
 func (d *msgpackDecDriver) readExtLen() (clen int) {
@@ -716,6 +730,13 @@ type MsgpackHandle struct {
 	// type is provided (e.g. decoding into a nil interface{}), you get back
 	// a []byte or string based on the setting of RawToString.
 	WriteExt bool
+
+	//xwx add
+	MaxDecodeStringLen	int
+	MaxDecodeArrayLen	int
+	MaxDecodeByteLen	int
+	MaxDecodeMapLen		int
+	//xwx add
 }
 
 func (h *MsgpackHandle) newEncDriver(e *Encoder) encDriver {
